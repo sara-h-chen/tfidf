@@ -1,6 +1,8 @@
 import os
 import string
 import numpy as np
+import knapsack
+import unittest
 
 from spacy.lang.en.stop_words import STOP_WORDS
 
@@ -13,11 +15,25 @@ STOP_WORDS.add('ll')
 STOP_WORDS.add('t')
 
 dictionary_of_words = {}
-most_frequent_word = {'word': '', 'count': 0}
+common_word = {}
+score_list = []
 
-# Augmented frequency
-# 0.5 + ( 0.5 * raw count / (max raw frequency of the most occurring term in the docs) )
-# https://en.wikipedia.org/wiki/Tf%E2%80%93idf
+
+##########################################
+#             TEST CASES                 #
+##########################################
+
+class TermFrequencyTest(unittest.TestCase):
+    def test(self):
+        test_dict = {}
+        tracked = {}
+        count_words(test_dict, tracked, 0, 'the quick brown fox jumps over the lazy dog'.split(" "))
+        calculate_tf(test_dict, tracked, 0)
+
+        self.assertEqual(test_dict['quick'][0]['total'], 1)
+        self.assertEqual(test_dict['quick'][0]['tf'], 0.75)
+        self.assertEqual(tracked[0]['word'], 'the')
+        self.assertEqual(tracked[0]['count'], 2)
 
 
 ##########################################
@@ -28,8 +44,8 @@ def read_files(text):
     # Replace new lines
     data = text.read().lower().replace('\n', ' ')
     # Remove all punctuation
-    data = data.translate(translator)
-    return remove_stopwords(data)
+    removed_punc = data.translate(translator)
+    return data, remove_stopwords(removed_punc)
 
 
 ##########################################
@@ -45,44 +61,91 @@ def remove_stopwords(data):
 
 # NOTE: Using structural information
 # 0 - Located early in the article, given more weight
-def count_words(doc, list_of_chunks):
-    length = len(list_of_chunks)
-    for i in range(0, length):
-        for word in list_of_chunks[i]:
-            if word in dictionary_of_words:
-                # Track the document number
-                if doc in dictionary_of_words[word]:
-                    # Track the section in which the word lies
-                    # 0 - Start of doc, 1 - middle of doc, 2 - end of doc
-                    if i in dictionary_of_words[word][doc]:
-                        dictionary_of_words[word][doc][i] += 1
-                    else:
-                        dictionary_of_words[word][doc].update({i: 1})
-                else:
-                    dictionary_of_words[word].update({doc: {i: 1}})
-
-                # Give a weighted score based on location in document
-                dictionary_of_words[word][doc]['score'] += ((length - i) * 1)
-                ttl = dictionary_of_words[word][doc]['total'] + 1
-                dictionary_of_words[word][doc]['total'] = ttl
-
-                # Track most frequent word
-                if ttl > most_frequent_word['count']:
-                    most_frequent_word['word'] = word
-                    most_frequent_word['count'] = ttl
-            else:
-                dictionary_of_words.update({word: {doc: {i: 1, 'score': ((length - i) * 1), 'total': 1}}})
-    return dictionary_of_words
+# 'word': {
+#     {'document_no': {
+#         'chunk': {},
+#         'score': 0,
+#         'total_count': 0
+#     }}
+# }
+# def count_words(doc, list_of_chunks):
+#     length = len(list_of_chunks)
+#     for i in range(0, length):
+#         for word in list_of_chunks[i]:
+#             if word in dictionary_of_words:
+#                 # Track the document number
+#                 if doc in dictionary_of_words[word]:
+#                     # Track the section in which the word lies
+#                     # 0 - Start of doc, 1 - middle of doc, 2 - end of doc
+#                     if i in dictionary_of_words[word][doc]:
+#                         dictionary_of_words[word][doc][i] += 1
+#                     else:
+#                         dictionary_of_words[word][doc].update({i: 1})
+#                 else:
+#                     dictionary_of_words[word].update({doc: {i: 1}})
+#
+#                 # Give a weighted score based on location in document
+#                 dictionary_of_words[word][doc]['score'] += ((length - i) * 1)
+#                 ttl = dictionary_of_words[word][doc]['total'] + 1
+#                 dictionary_of_words[word][doc]['total'] = ttl
+#
+#                 # Track most frequent word
+#                 if ttl > most_frequent_word['count']:
+#                     most_frequent_word['word'] = word
+#                     most_frequent_word['count'] = ttl
+#             else:
+#                 dictionary_of_words.update({word: {doc: {i: 1, 'score': ((length - i) * 1), 'total': 1}}})
+#     return dictionary_of_words
 
 
 ##########################################
 #                 COUNT                  #
 ##########################################
 
-def counter():
-    # for key, value in dictionary_of_words.items():
-    #
+def count_words(word_dict, tracked_common_word, doc_id, text):
+    for word in text:
+        if word in word_dict:
+            if doc_id in word_dict[word]:
+                word_dict[word][doc_id]['total'] += 1
+            else:
+                word_dict[word].update({doc_id: {'total': 1}})
+        else:
+            word_dict.update({word: {doc_id: {'total': 1}}})
+
+        # Track the most frequent word
+        if doc_id in tracked_common_word:
+            if word_dict[word][doc_id]['total'] > tracked_common_word[doc_id]['count']:
+                tracked_common_word[doc_id]['count'] = word_dict[word][doc_id]['total']
+                tracked_common_word[doc_id]['word'] = word
+        else:
+            tracked_common_word.update({doc_id: {'word': word, 'count': word_dict[word][doc_id]['total']}})
+
+    return word_dict
+
+
+# Augmented frequency
+# 0.5 + ( 0.5 * raw count / (max raw frequency of the most occurring term in the docs) )
+# https://en.wikipedia.org/wiki/Tf%E2%80%93idf
+def calculate_tf(word_dict, most_common, doc_id):
+    for key, value in word_dict.items():
+        term_frequency = 0.5 + (0.5 * (word_dict[key][doc_id]['total'] / most_common[doc_id]['count']))
+        word_dict[key][doc_id]['tf'] = term_frequency
     return
+
+
+def calculate_average_tf(chunk_number, doc_id, sentences):
+    # print(sentences)
+    for j in range(0, len(sentences)):
+        sentence_score = 0
+        sentence = sentences[j].split(" ")
+        for word in sentence:
+            if word in dictionary_of_words:
+                sentence_score += dictionary_of_words[word][doc_id]['tf']
+        average_tf = sentence_score / len(sentence)
+        score_list.append({'index': j, 'average_tf': average_tf, 'length': len(sentence),
+                           'chunk': chunk_number, 'doc_id': doc_id,
+                           'multiplier': (3 - doc_id) * average_tf})
+    return score_list
 
 
 ##########################################
@@ -104,6 +167,9 @@ def split_chunks(long_list, no_words):
 if __name__ == '__main__':
     number_of_words = 0
 
+    # RUN UNIT TEST
+    # unittest.main()
+
     # Initialize punctuation remover
     translator = str.maketrans(string.punctuation, ' ' * len(string.punctuation))
     # Loop through all given documents
@@ -112,10 +178,19 @@ if __name__ == '__main__':
         filename = os.path.join(TEST_FILE_DIR, os.fsencode(file).decode())
         if filename.endswith('.txt'):
             with open(filename, 'r') as text_file:
-                for_parsing = read_files(text_file)
-                sorted_chunks = count_words(document_number, split_chunks(for_parsing, number_of_words))
+                doc_string, for_preprocessing = read_files(text_file)
+                count_words(dictionary_of_words, common_word, document_number, for_preprocessing)
+                calculate_tf(dictionary_of_words, common_word, document_number)
+
                 # DEBUG
-                print(sorted_chunks)
-                print(most_frequent_word)
+                print(dictionary_of_words)
+                print(common_word)
+
+                sentence_chunks = np.array_split(list(filter(None, doc_string.split(". "))), 3)
+                for i in range(0, len(sentence_chunks)):
+                    calculate_average_tf(i, document_number, sentence_chunks[i])
+
+                print(score_list)
                 document_number += 1
+                # TODO: Remove this when finished
                 exit()
