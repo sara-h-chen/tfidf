@@ -8,6 +8,7 @@ import operator
 from spacy.lang.en.stop_words import STOP_WORDS
 
 CUR_DIRECTORY = os.path.dirname(os.path.abspath(__file__))
+# WARNING: Only put the docs you want to summarize in this directory
 TEST_FILE_DIR = os.path.join(CUR_DIRECTORY, "Test Files")
 
 # Remove contractions
@@ -109,6 +110,15 @@ def calculate_tf(word_dict, most_common, doc_id):
     return
 
 
+def calculate_tfidf(dictionary, doc_count):
+    for word, value in dictionary.items():
+        number_of_appearances = len(dictionary[word].keys())
+        idf = np.log(doc_count / (1 + number_of_appearances))
+        for doc_id in dictionary[word].keys():
+            dictionary[word][doc_id]['tfidf'] = dictionary[word][doc_id]['tf'] * idf
+    return
+
+
 def calculate_average_tf(chunk_number, doc_id, sentences):
     for j in range(0, len(sentences)):
         sentence_score = 0
@@ -148,7 +158,6 @@ def split_chunks(long_list, no_words):
 def reconstruct(corpus, chosen_sentences):
     # Sort them by the order in which they appear
     chosen_sentences.sort(key=operator.itemgetter('doc_id', 'chunk', 'index'))
-    print(chosen_sentences)
     output_summary = ""
     for sentence in chosen_sentences:
         sentence_index = sentence['index']
@@ -165,7 +174,7 @@ def reconstruct(corpus, chosen_sentences):
 
 if __name__ == '__main__':
     lmt = 250
-    use_tfidf = False
+    use_tfidf = True
 
     complete_corpus = []
 
@@ -174,6 +183,8 @@ if __name__ == '__main__':
 
     # Loop through all given documents
     document_number = 0
+    # NOTE: Only the files that are to be summarized are put in this folder
+    number_of_docs = len(os.listdir(TEST_FILE_DIR))
     for file in os.listdir(TEST_FILE_DIR):
         filename = os.path.join(TEST_FILE_DIR, os.fsencode(file).decode())
         if filename.endswith('.txt'):
@@ -203,15 +214,18 @@ if __name__ == '__main__':
 
             document_number += 1
 
+    if use_tfidf:
+        calculate_tfidf(dictionary_of_words, number_of_docs)
+
     # DEBUG
     # print(score_list)
-    # print(dictionary_of_words)
+    print(dictionary_of_words)
 
     # Use dynamic programming to find the best sentences to include
-    bagged = knapsack.knapsack01_dp(score_list, lmt, use_tfidf)
-    val, wt = knapsack.total_value(bagged, lmt)
-    print("Reconstructed summary for a total value of %f and a total weight of %i" % (val, -wt))
-
-    summary = reconstruct(complete_corpus, bagged)
-    print("Summary ------>> ")
-    print(summary)
+    # bagged = knapsack.knapsack01_dp(score_list, lmt, use_tfidf)
+    # val, wt = knapsack.total_value(bagged, lmt)
+    # print("Reconstructed summary for a total value of %f and a total weight of %i" % (val, -wt))
+    #
+    # summary = reconstruct(complete_corpus, bagged)
+    # print("Summary ------>> ")
+    # print(summary)
