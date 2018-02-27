@@ -44,8 +44,13 @@ class TermFrequencyTest(unittest.TestCase):
 def read_files(text):
     # Replace new lines
     data = text.read().lower().replace('\n', ' ')
+
+    # Remove all numbers
+    numset = '0123456789'
+    removed_num = data.translate(str.maketrans(numset, ' ' * len(numset)))
+
     # Remove all punctuation
-    removed_punc = data.translate(translator)
+    removed_punc = removed_num.translate(translator)
     processed, length = remove_stopwords(removed_punc)
     return data, processed, length
 
@@ -133,13 +138,14 @@ def count_words(word_dict, tracked_common_word, doc_id, text):
 # https://en.wikipedia.org/wiki/Tf%E2%80%93idf
 def calculate_tf(word_dict, most_common, doc_id):
     for key, value in word_dict.items():
-        term_frequency = 0.5 + (0.5 * (word_dict[key][doc_id]['total'] / most_common[doc_id]['count']))
-        word_dict[key][doc_id]['tf'] = term_frequency
+        # if the word is in document we're currently looking at
+        if doc_id in word_dict[key]:
+            term_frequency = 0.5 + (0.5 * (word_dict[key][doc_id]['total'] / most_common[doc_id]['count']))
+            word_dict[key][doc_id]['tf'] = term_frequency
     return
 
 
 def calculate_average_tf(chunk_number, doc_id, sentences):
-    # print(sentences)
     for j in range(0, len(sentences)):
         sentence_score = 0
         sentence = sentences[j].split(" ")
@@ -147,14 +153,16 @@ def calculate_average_tf(chunk_number, doc_id, sentences):
             if word in dictionary_of_words:
                 sentence_score += dictionary_of_words[word][doc_id]['tf']
         average_tf = sentence_score / len(sentence)
+
+        # If less than half a Tweet long, begin penalizing the score
+        if len(sentences[j]) < 70:
+            average_tf *= (len(sentences[j]) / 100)
+
+        mult = (3 - chunk_number)
         score_list.append({'index': j, 'average_tf': average_tf, 'length': len(sentence),
                            'chunk': chunk_number, 'doc_id': doc_id,
-                           'multiplier': (3 - chunk_number) * average_tf})
+                           'multiplier': (((mult - 1) * 0.25) + 1.0) * average_tf})
     return score_list
-
-
-def normalize_by_doc_length(score_list):
-    return
 
 
 ##########################################
@@ -173,13 +181,14 @@ def split_chunks(long_list, no_words):
 #            UNPACK SUMMARY              #
 ##########################################
 
-def reconstruct(chunks, chosen_sentences):
+def reconstruct(corpus, chosen_sentences):
     chosen_sentences.sort(key=operator.itemgetter('doc_id', 'chunk', 'index'))
     output_summary = ""
     for sentence in chosen_sentences:
         sentence_index = sentence['index']
         chunk_index = sentence['chunk']
-        output_summary += chunks[chunk_index][sentence_index]
+        document_no = sentence['doc_id']
+        output_summary += corpus[document_no][chunk_index][sentence_index]
         output_summary += ". "
     return output_summary
 
@@ -190,6 +199,8 @@ def reconstruct(chunks, chosen_sentences):
 
 if __name__ == '__main__':
     lmt = 200
+
+    complete_corpus = []
 
     # RUN UNIT TEST
     # unittest.main()
@@ -213,26 +224,24 @@ if __name__ == '__main__':
 
                 # Calculate the average tf for each sentence
                 sentence_chunks = np.array_split(list(filter(None, doc_string.split(". "))), 3)
+                complete_corpus.append(sentence_chunks)
                 for i in range(0, len(sentence_chunks)):
-
                     calculate_average_tf(i, document_number, sentence_chunks[i])
 
+                # Normalize by doc length
                 for score in score_list:
                     # noinspection PyTypeChecker
                     score['normalized_tf'] = score['multiplier'] / doc_length
 
-                # DEBUG
-                # print(score_list)
-                # print(doc_length)
+            document_number += 1
 
-                bagged = knapsack.knapsack01_dp(score_list, lmt)
-                val, wt = knapsack.total_value(bagged, lmt)
-                print("for a total value of %f and a total weight of %i" % (val, -wt))
+    # DEBUG
+    # print(score_list)
 
-                summary = reconstruct(sentence_chunks, bagged)
-                print("Summary ------>> ")
-                print(summary)
+    bagged = knapsack.knapsack01_dp(score_list, lmt)
+    val, wt = knapsack.total_value(bagged, lmt)
+    print("Reconstructed summary for a total value of %f and a total weight of %i" % (val, -wt))
 
-                document_number += 1
-                # TODO: Remove this when finished
-                exit()
+    summary = reconstruct(complete_corpus, bagged)
+    print("Summary ------>> ")
+    print(summary)
