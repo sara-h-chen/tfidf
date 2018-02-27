@@ -45,7 +45,8 @@ def read_files(text):
     data = text.read().lower().replace('\n', ' ')
     # Remove all punctuation
     removed_punc = data.translate(translator)
-    return data, remove_stopwords(removed_punc)
+    processed, length = remove_stopwords(removed_punc)
+    return data, processed, length
 
 
 ##########################################
@@ -55,8 +56,11 @@ def read_files(text):
 def remove_stopwords(data):
     # Remove stop words
     data = data.split(" ")
-    text_to_parse = list(filter(None, [word for word in data if word not in STOP_WORDS]))
-    return text_to_parse
+    spaces_removed = list(filter(None, data))
+
+    length = len(spaces_removed)
+    text_to_parse = [word for word in spaces_removed if word not in STOP_WORDS]
+    return text_to_parse, length
 
 
 # NOTE: Using structural information
@@ -144,8 +148,12 @@ def calculate_average_tf(chunk_number, doc_id, sentences):
         average_tf = sentence_score / len(sentence)
         score_list.append({'index': j, 'average_tf': average_tf, 'length': len(sentence),
                            'chunk': chunk_number, 'doc_id': doc_id,
-                           'multiplier': (3 - doc_id) * average_tf})
+                           'multiplier': (3 - chunk_number) * average_tf})
     return score_list
+
+
+def normalize_by_doc_length(score_list):
+    return
 
 
 ##########################################
@@ -155,8 +163,8 @@ def calculate_average_tf(chunk_number, doc_id, sentences):
 # Split the document into different sizes; give each different weights
 def split_chunks(long_list, no_words):
     split = np.array_split(long_list, 3)
-    for i in range(0, len(split)):
-        no_words += (i * len(split[i]))
+    for j in range(0, len(split)):
+        no_words += (j * len(split[j]))
     return split
 
 
@@ -178,7 +186,8 @@ if __name__ == '__main__':
         filename = os.path.join(TEST_FILE_DIR, os.fsencode(file).decode())
         if filename.endswith('.txt'):
             with open(filename, 'r') as text_file:
-                doc_string, for_preprocessing = read_files(text_file)
+                # Preprocess the files, calculating the tf value for each word
+                doc_string, for_preprocessing, doc_length = read_files(text_file)
                 count_words(dictionary_of_words, common_word, document_number, for_preprocessing)
                 calculate_tf(dictionary_of_words, common_word, document_number)
 
@@ -186,11 +195,20 @@ if __name__ == '__main__':
                 print(dictionary_of_words)
                 print(common_word)
 
+                # Calculate the average tf for each sentence
                 sentence_chunks = np.array_split(list(filter(None, doc_string.split(". "))), 3)
                 for i in range(0, len(sentence_chunks)):
+
                     calculate_average_tf(i, document_number, sentence_chunks[i])
 
+                for score in score_list:
+                    # noinspection PyTypeChecker
+                    score['normalized_tf'] = score['multiplier'] / doc_length
+
+                # DEBUG
                 print(score_list)
+                print(doc_length)
+
                 document_number += 1
                 # TODO: Remove this when finished
                 exit()
