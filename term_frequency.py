@@ -43,16 +43,19 @@ class TermFrequencyTest(unittest.TestCase):
 
 def read_files(text):
     # Replace new lines
-    data = text.read().lower().replace('\n', ' ')
+    lines = text.read().replace('\n', ' ')
+    data = lines.lower()
 
     # Remove all numbers
     numset = '0123456789'
     removed_num = data.translate(str.maketrans(numset, ' ' * len(numset)))
 
     # Remove all punctuation
+    # Initialize punctuation remover
+    translator = str.maketrans(string.punctuation, ' ' * len(string.punctuation))
     removed_punc = removed_num.translate(translator)
     processed, length = remove_stopwords(removed_punc)
-    return data, processed, length
+    return lines, processed, length
 
 
 ##########################################
@@ -67,45 +70,6 @@ def remove_stopwords(data):
     length = len(spaces_removed)
     text_to_parse = [word for word in spaces_removed if word not in STOP_WORDS]
     return text_to_parse, length
-
-
-# NOTE: Using structural information
-# 0 - Located early in the article, given more weight
-# 'word': {
-#     {'document_no': {
-#         'chunk': {},
-#         'score': 0,
-#         'total_count': 0
-#     }}
-# }
-# def count_words(doc, list_of_chunks):
-#     length = len(list_of_chunks)
-#     for i in range(0, length):
-#         for word in list_of_chunks[i]:
-#             if word in dictionary_of_words:
-#                 # Track the document number
-#                 if doc in dictionary_of_words[word]:
-#                     # Track the section in which the word lies
-#                     # 0 - Start of doc, 1 - middle of doc, 2 - end of doc
-#                     if i in dictionary_of_words[word][doc]:
-#                         dictionary_of_words[word][doc][i] += 1
-#                     else:
-#                         dictionary_of_words[word][doc].update({i: 1})
-#                 else:
-#                     dictionary_of_words[word].update({doc: {i: 1}})
-#
-#                 # Give a weighted score based on location in document
-#                 dictionary_of_words[word][doc]['score'] += ((length - i) * 1)
-#                 ttl = dictionary_of_words[word][doc]['total'] + 1
-#                 dictionary_of_words[word][doc]['total'] = ttl
-#
-#                 # Track most frequent word
-#                 if ttl > most_frequent_word['count']:
-#                     most_frequent_word['word'] = word
-#                     most_frequent_word['count'] = ttl
-#             else:
-#                 dictionary_of_words.update({word: {doc: {i: 1, 'score': ((length - i) * 1), 'total': 1}}})
-#     return dictionary_of_words
 
 
 ##########################################
@@ -169,7 +133,7 @@ def calculate_average_tf(chunk_number, doc_id, sentences):
 #          STRUCTURAL CONTEXT            #
 ##########################################
 
-# Split the document into different sizes; give each different weights
+# UNUSED
 def split_chunks(long_list, no_words):
     split = np.array_split(long_list, 3)
     for j in range(0, len(split)):
@@ -182,6 +146,7 @@ def split_chunks(long_list, no_words):
 ##########################################
 
 def reconstruct(corpus, chosen_sentences):
+    # Sort them by the order in which they appear
     chosen_sentences.sort(key=operator.itemgetter('doc_id', 'chunk', 'index'))
     output_summary = ""
     for sentence in chosen_sentences:
@@ -198,15 +163,14 @@ def reconstruct(corpus, chosen_sentences):
 ##########################################
 
 if __name__ == '__main__':
-    lmt = 200
+    lmt = 250
+    use_tfidf = False
 
     complete_corpus = []
 
     # RUN UNIT TEST
     # unittest.main()
 
-    # Initialize punctuation remover
-    translator = str.maketrans(string.punctuation, ' ' * len(string.punctuation))
     # Loop through all given documents
     document_number = 0
     for file in os.listdir(TEST_FILE_DIR):
@@ -222,13 +186,16 @@ if __name__ == '__main__':
                 # print(dictionary_of_words)
                 # print(common_word)
 
-                # Calculate the average tf for each sentence
+                # Use structural information
+                # Split the document into 3 different sections; give each different weights
                 sentence_chunks = np.array_split(list(filter(None, doc_string.split(". "))), 3)
                 complete_corpus.append(sentence_chunks)
+
+                # Calculate the average tf for each sentence
                 for i in range(0, len(sentence_chunks)):
                     calculate_average_tf(i, document_number, sentence_chunks[i])
 
-                # Normalize by doc length
+                # Normalize by document length
                 for score in score_list:
                     # noinspection PyTypeChecker
                     score['normalized_tf'] = score['multiplier'] / doc_length
@@ -237,8 +204,10 @@ if __name__ == '__main__':
 
     # DEBUG
     # print(score_list)
+    # print(dictionary_of_words)
 
-    bagged = knapsack.knapsack01_dp(score_list, lmt)
+    # Use dynamic programming to find the best sentences to include
+    bagged = knapsack.knapsack01_dp(score_list, lmt, use_tfidf)
     val, wt = knapsack.total_value(bagged, lmt)
     print("Reconstructed summary for a total value of %f and a total weight of %i" % (val, -wt))
 

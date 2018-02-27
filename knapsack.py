@@ -11,13 +11,16 @@ def total_value(comb, limit):
     return (totval, -totwt) if totwt <= limit else (0, 0)
 
 
-def knapsack01_dp(sentences, limit):
+def knapsack01_dp(sentences, limit, tfidf):
     # Initialize
     table = [[0 for w in range(limit + 1)] for j in range(len(sentences) + 1)]
 
     for j in range(1, len(sentences) + 1):
         sentence_length = sentences[j - 1]['length']
-        tf_score = sentences[j - 1]['normalized_tf']
+        if tfidf:
+            tf_score = sentences[j - 1]['normalized_tfidf']
+        else:
+            tf_score = sentences[j - 1]['normalized_tf']
         for w in range(1, limit + 1):
             if sentence_length > w:
                 table[j][w] = table[j - 1][w]
