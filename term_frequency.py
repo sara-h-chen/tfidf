@@ -3,6 +3,7 @@ import string
 import numpy as np
 import knapsack
 import unittest
+import operator
 
 from spacy.lang.en.stop_words import STOP_WORDS
 
@@ -169,11 +170,26 @@ def split_chunks(long_list, no_words):
 
 
 ##########################################
+#            UNPACK SUMMARY              #
+##########################################
+
+def reconstruct(chunks, chosen_sentences):
+    chosen_sentences.sort(key=operator.itemgetter('doc_id', 'chunk', 'index'))
+    output_summary = ""
+    for sentence in chosen_sentences:
+        sentence_index = sentence['index']
+        chunk_index = sentence['chunk']
+        output_summary += chunks[chunk_index][sentence_index]
+        output_summary += ". "
+    return output_summary
+
+
+##########################################
 #              MAIN METHOD               #
 ##########################################
 
 if __name__ == '__main__':
-    number_of_words = 0
+    lmt = 200
 
     # RUN UNIT TEST
     # unittest.main()
@@ -192,8 +208,8 @@ if __name__ == '__main__':
                 calculate_tf(dictionary_of_words, common_word, document_number)
 
                 # DEBUG
-                print(dictionary_of_words)
-                print(common_word)
+                # print(dictionary_of_words)
+                # print(common_word)
 
                 # Calculate the average tf for each sentence
                 sentence_chunks = np.array_split(list(filter(None, doc_string.split(". "))), 3)
@@ -206,8 +222,16 @@ if __name__ == '__main__':
                     score['normalized_tf'] = score['multiplier'] / doc_length
 
                 # DEBUG
-                print(score_list)
-                print(doc_length)
+                # print(score_list)
+                # print(doc_length)
+
+                bagged = knapsack.knapsack01_dp(score_list, lmt)
+                val, wt = knapsack.total_value(bagged, lmt)
+                print("for a total value of %f and a total weight of %i" % (val, -wt))
+
+                summary = reconstruct(sentence_chunks, bagged)
+                print("Summary ------>> ")
+                print(summary)
 
                 document_number += 1
                 # TODO: Remove this when finished
