@@ -148,6 +148,7 @@ def split_chunks(long_list, no_words):
 def reconstruct(corpus, chosen_sentences):
     # Sort them by the order in which they appear
     chosen_sentences.sort(key=operator.itemgetter('doc_id', 'chunk', 'index'))
+    print(chosen_sentences)
     output_summary = ""
     for sentence in chosen_sentences:
         sentence_index = sentence['index']
