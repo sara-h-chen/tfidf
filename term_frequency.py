@@ -1,3 +1,13 @@
+################################################################
+#  CAUTION: This program runs on Python 3 and assumes you      #
+#  have SpaCy installed, or have access to SpaCy's stop words  #                     #
+################################################################
+#  Before you run the algorithm, please ensure you have        #
+#  specified your desired word limit in the 'lmt' variable     #
+#  found in the main method. Also specify if tf-idf should be  #
+#  used using 'use_tfidf' variable.                            #
+################################################################
+
 import os
 import string
 import numpy as np
@@ -195,12 +205,13 @@ def reconstruct(corpus, chosen_sentences):
 ##########################################
 
 if __name__ == '__main__':
+    # IMPORTANT: SPECIFY WORD LIMIT & USE OF TF-IDF
     lmt = 100
     use_tfidf = True
 
     complete_corpus = []
 
-    # RUN UNIT TEST
+    # Run unit test
     # unittest.main()
 
     # Loop through all given documents
@@ -262,5 +273,5 @@ if __name__ == '__main__':
     print("Reconstructed summary for a total value of %f and a total weight of %i" % (val, -wt))
 
     summary = reconstruct(complete_corpus, bagged)
-    print("Summary ------>> ")
+    print("--------- Summary -------->> ")
     print(summary)
