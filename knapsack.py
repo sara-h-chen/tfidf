@@ -1,7 +1,11 @@
-# https://rosettacode.org/wiki/Knapsack_problem/0-1#Python
+################################################################
+#  Dynamic Programming: 0-1 Knapsack to choose best sentences  #
+################################################################
+#  https://rosettacode.org/wiki/Knapsack_problem/0-1#Python    #
+################################################################
 
 
-# For debugging purposes
+# DEBUG
 def total_value(comb, limit):
     """ Total up a particular combination of items """
     totwt = totval = 0
@@ -12,12 +16,11 @@ def total_value(comb, limit):
 
 
 def knapsack01_dp(sentences, limit, tfidf):
-    # Initialize
+    # Initialize matrix
     table = [[0 for w in range(limit + 1)] for j in range(len(sentences) + 1)]
 
     for j in range(1, len(sentences) + 1):
         sentence_length = sentences[j - 1]['length']
-        # TODO: Fix this and get it to work
         if tfidf:
             tf_score = sentences[j - 1]['normalized_tfidf']
         else:
