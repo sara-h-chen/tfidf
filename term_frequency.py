@@ -17,6 +17,7 @@ STOP_WORDS.add('ll')
 STOP_WORDS.add('t')
 
 dictionary_of_words = {}
+document_lengths = {}
 common_word = {}
 score_list = []
 
@@ -110,33 +111,63 @@ def calculate_tf(word_dict, most_common, doc_id):
     return
 
 
-def calculate_tfidf(dictionary, doc_count):
-    for word, value in dictionary.items():
-        number_of_appearances = len(dictionary[word].keys())
-        idf = np.log(doc_count / (1 + number_of_appearances))
-        for doc_id in dictionary[word].keys():
-            dictionary[word][doc_id]['tfidf'] = dictionary[word][doc_id]['tf'] * idf
-    return
-
-
-def calculate_average_tf(chunk_number, doc_id, sentences):
+def calculate_average_tf(chunk_number, doc_id, sentences, document_length):
     for j in range(0, len(sentences)):
         sentence_score = 0
         sentence = sentences[j].split(" ")
+
+        # If it is not an empty sentence
         for word in sentence:
             if word in dictionary_of_words:
                 sentence_score += dictionary_of_words[word][doc_id]['tf']
+
         average_tf = sentence_score / len(sentence)
 
         # If less than half a Tweet long, begin penalizing the score
         if len(sentences[j]) < 70:
             average_tf *= (len(sentences[j]) / 100)
 
+        # Set up a multiplier that tells you which 1/3 the sentence lies in
         mult = (3 - chunk_number)
-        score_list.append({'index': j, 'average_tf': average_tf, 'length': len(sentence),
-                           'chunk': chunk_number, 'doc_id': doc_id,
-                           'multiplier': (((mult - 1) * 0.25) + 1.0) * average_tf})
+        # Apply multiplier; is later normalized by the length of the document
+        after_multiplier = (((mult - 1) * 0.25) + 1.0) * average_tf
+        score_list.append({'index': j, 'average_tf': average_tf,
+                           'length': len(sentence), 'chunk': chunk_number,
+                           'doc_id': doc_id, 'multiplier': after_multiplier,
+                           'normalized_tf': (after_multiplier / document_length)})
     return score_list
+
+
+def calculate_idf(dictionary, doc_count):
+    for word, value in dictionary.items():
+        number_of_appearances = len(dictionary[word].keys())
+        # Adjusted for division by 0
+        idf = np.log(doc_count / (1 + number_of_appearances))
+        dictionary[word]['idf'] = idf
+    return
+
+
+def calculate_tfidf(dictionary, doc_id, section, sentence_index, corpus, scores, score_list_index):
+    specific_sentence = corpus[doc_id][section][sentence_index]
+    split_sentence = specific_sentence.split(" ")
+    total_tfidf = 0
+    for word in split_sentence:
+        if word in dictionary:
+            total_tfidf += (dictionary[word][doc_id]['tf'] * dictionary[word]['idf'])
+    averaged_tfidf = total_tfidf / len(split_sentence)
+
+    # If less than half a Tweet long, begin penalizing the score
+    if len(specific_sentence) < 70:
+        averaged_tfidf *= (len(specific_sentence) / 100)
+
+    scores[score_list_index]['average_tfidf'] = averaged_tfidf
+
+    # Apply multiplier; is later normalized by the length of the document
+    mult = (3 - section)
+    after_multiplier = (((mult - 1) * 0.25) + 1.0) * averaged_tfidf
+    scores[score_list_index]['multiplier_tfidf'] = after_multiplier
+    scores[score_list_index]['normalized_tfidf'] = (after_multiplier / document_lengths[doc_id])
+    return
 
 
 ##########################################
@@ -184,12 +215,13 @@ if __name__ == '__main__':
     # Loop through all given documents
     document_number = 0
     # NOTE: Only the files that are to be summarized are put in this folder
-    number_of_docs = len(os.listdir(TEST_FILE_DIR))
-    for file in os.listdir(TEST_FILE_DIR):
+    corpus_files = os.listdir(TEST_FILE_DIR)
+    number_of_docs = len(corpus_files)
+    for file in corpus_files:
         filename = os.path.join(TEST_FILE_DIR, os.fsencode(file).decode())
         if filename.endswith('.txt'):
             with open(filename, 'r') as text_file:
-                # Preprocess the files, calculating the tf value for each word
+                # Pre-process the files, calculating the tf value for each word
                 doc_string, for_preprocessing, doc_length = read_files(text_file)
                 count_words(dictionary_of_words, common_word, document_number, for_preprocessing)
                 calculate_tf(dictionary_of_words, common_word, document_number)
@@ -200,32 +232,44 @@ if __name__ == '__main__':
 
                 # Use structural information
                 # Split the document into 3 different sections; give each different weights
+                document_lengths.update({document_number: doc_length})
                 sentence_chunks = np.array_split(list(filter(None, doc_string.split(". "))), 3)
                 complete_corpus.append(sentence_chunks)
 
                 # Calculate the average tf for each sentence
                 for i in range(0, len(sentence_chunks)):
-                    calculate_average_tf(i, document_number, sentence_chunks[i])
-
-                # Normalize by document length
-                for score in score_list:
-                    # noinspection PyTypeChecker
-                    score['normalized_tf'] = score['multiplier'] / doc_length
+                    calculate_average_tf(i, document_number, sentence_chunks[i], doc_length)
 
             document_number += 1
 
-    if use_tfidf:
-        calculate_tfidf(dictionary_of_words, number_of_docs)
-
     # DEBUG
     # print(score_list)
-    print(dictionary_of_words)
+    # print(dictionary_of_words)
+
+    if use_tfidf:
+        # Calculate tf-idf
+        # complete_corpus[i][j][k]
+        # i = doc_id
+        # j = section in document
+        # k = sentence in chunk
+        sentence_counter = 0
+        calculate_idf(dictionary_of_words, number_of_docs)
+        for doc in range(0, len(complete_corpus)):
+            for chunk in range(0, len(complete_corpus[doc])):
+                for sentence in range(0, len(complete_corpus[doc][chunk])):
+                    # DEBUG
+                    # print(complete_corpus[doc][chunk][sentence])
+                    # print(score_list[sentence_counter])
+
+                    calculate_tfidf(dictionary_of_words, doc, chunk, sentence,
+                                    complete_corpus, score_list, sentence_counter)
+                    sentence_counter += 1
 
     # Use dynamic programming to find the best sentences to include
-    # bagged = knapsack.knapsack01_dp(score_list, lmt, use_tfidf)
-    # val, wt = knapsack.total_value(bagged, lmt)
-    # print("Reconstructed summary for a total value of %f and a total weight of %i" % (val, -wt))
-    #
-    # summary = reconstruct(complete_corpus, bagged)
-    # print("Summary ------>> ")
-    # print(summary)
+    bagged = knapsack.knapsack01_dp(score_list, lmt, use_tfidf)
+    val, wt = knapsack.total_value(bagged, lmt)
+    print("Reconstructed summary for a total value of %f and a total weight of %i" % (val, -wt))
+
+    summary = reconstruct(complete_corpus, bagged)
+    print("Summary ------>> ")
+    print(summary)

@@ -17,6 +17,7 @@ def knapsack01_dp(sentences, limit, tfidf):
 
     for j in range(1, len(sentences) + 1):
         sentence_length = sentences[j - 1]['length']
+        # TODO: Fix this and get it to work
         if tfidf:
             tf_score = sentences[j - 1]['normalized_tfidf']
         else:
