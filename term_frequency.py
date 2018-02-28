@@ -52,8 +52,8 @@ def read_files(text):
     numset = '0123456789'
     removed_num = data.translate(str.maketrans(numset, ' ' * len(numset)))
 
-    # Remove all punctuation
     # Initialize punctuation remover
+    # Remove all punctuation
     translator = str.maketrans(string.punctuation, ' ' * len(string.punctuation))
     removed_punc = removed_num.translate(translator)
     processed, length = remove_stopwords(removed_punc)
@@ -65,10 +65,10 @@ def read_files(text):
 ##########################################
 
 def remove_stopwords(data):
-    # Remove stop words
     data = data.split(" ")
     spaces_removed = list(filter(None, data))
 
+    # Remove stop words
     length = len(spaces_removed)
     text_to_parse = [word for word in spaces_removed if word not in STOP_WORDS]
     return text_to_parse, length
@@ -80,7 +80,9 @@ def remove_stopwords(data):
 
 def count_words(word_dict, tracked_common_word, doc_id, text):
     for word in text:
+        # If word has been seen before
         if word in word_dict:
+            # If current doc has been seen before
             if doc_id in word_dict[word]:
                 word_dict[word][doc_id]['total'] += 1
             else:
@@ -88,7 +90,7 @@ def count_words(word_dict, tracked_common_word, doc_id, text):
         else:
             word_dict.update({word: {doc_id: {'total': 1}}})
 
-        # Track the most frequent word
+        # Track the most frequent word; used for augmented tf
         if doc_id in tracked_common_word:
             if word_dict[word][doc_id]['total'] > tracked_common_word[doc_id]['count']:
                 tracked_common_word[doc_id]['count'] = word_dict[word][doc_id]['total']
@@ -103,8 +105,9 @@ def count_words(word_dict, tracked_common_word, doc_id, text):
 # 0.5 + ( 0.5 * raw count / (max raw frequency of the most occurring term in the docs) )
 # https://en.wikipedia.org/wiki/Tf%E2%80%93idf
 def calculate_tf(word_dict, most_common, doc_id):
+    # For all words
     for key, value in word_dict.items():
-        # if the word is in document we're currently looking at
+        # If the word is in document currently processed
         if doc_id in word_dict[key]:
             term_frequency = 0.5 + (0.5 * (word_dict[key][doc_id]['total'] / most_common[doc_id]['count']))
             word_dict[key][doc_id]['tf'] = term_frequency
@@ -171,23 +174,11 @@ def calculate_tfidf(dictionary, doc_id, section, sentence_index, corpus, scores,
 
 
 ##########################################
-#          STRUCTURAL CONTEXT            #
-##########################################
-
-# UNUSED
-def split_chunks(long_list, no_words):
-    split = np.array_split(long_list, 3)
-    for j in range(0, len(split)):
-        no_words += (j * len(split[j]))
-    return split
-
-
-##########################################
 #            UNPACK SUMMARY              #
 ##########################################
 
 def reconstruct(corpus, chosen_sentences):
-    # Sort them by the order in which they appear
+    # Guarantee sorting by order in which they appear
     chosen_sentences.sort(key=operator.itemgetter('doc_id', 'chunk', 'index'))
     output_summary = ""
     for sentence in chosen_sentences:
@@ -204,7 +195,7 @@ def reconstruct(corpus, chosen_sentences):
 ##########################################
 
 if __name__ == '__main__':
-    lmt = 250
+    lmt = 100
     use_tfidf = True
 
     complete_corpus = []
@@ -214,7 +205,7 @@ if __name__ == '__main__':
 
     # Loop through all given documents
     document_number = 0
-    # NOTE: Only the files that are to be summarized are put in this folder
+    # WARNING: Only the files that are to be summarized are put in this folder
     corpus_files = os.listdir(TEST_FILE_DIR)
     number_of_docs = len(corpus_files)
     for file in corpus_files:
@@ -251,7 +242,7 @@ if __name__ == '__main__':
         # complete_corpus[i][j][k]
         # i = doc_id
         # j = section in document
-        # k = sentence in chunk
+        # k = sentence in section
         sentence_counter = 0
         calculate_idf(dictionary_of_words, number_of_docs)
         for doc in range(0, len(complete_corpus)):
