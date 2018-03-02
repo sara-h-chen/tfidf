@@ -1,6 +1,6 @@
 ################################################################
 #  CAUTION: This program runs on Python 3 and assumes you      #
-#  have SpaCy installed, or have access to SpaCy's stop words  #                     #
+#  have SpaCy installed, or have access to SpaCy's stop words  #
 ################################################################
 #  Before you run the algorithm, please ensure you have        #
 #  specified your desired word limit in the 'lmt' variable     #
@@ -11,7 +11,6 @@
 import os
 import string
 import numpy as np
-import knapsack
 import unittest
 import operator
 
@@ -183,6 +182,54 @@ def calculate_tfidf(dictionary, doc_id, section, sentence_index, corpus, scores,
     return
 
 
+################################################################
+#  Dynamic Programming: 0-1 Knapsack to choose best sentences  #
+################################################################
+#  https://rosettacode.org/wiki/Knapsack_problem/0-1#Python    #
+################################################################
+
+# DEBUG
+# Total up a particular combination of items
+def total_value(comb, limit):
+    totwt = totval = 0
+    for dictionary in comb:
+        totwt += dictionary['length']
+        totval += dictionary['normalized_tf']
+    return (totval, -totwt) if totwt <= limit else (0, 0)
+
+
+def knapsack01_dp(sentences, limit, tfidf):
+    # Initialize matrix
+    table = [[0 for w in range(limit + 1)] for j in range(len(sentences) + 1)]
+
+    for j in range(1, len(sentences) + 1):
+        sentence_length = sentences[j - 1]['length']
+        if tfidf:
+            tf_score = sentences[j - 1]['normalized_tfidf']
+        else:
+            tf_score = sentences[j - 1]['normalized_tf']
+
+        # Memoize best score seen so far
+        for w in range(1, limit + 1):
+            if sentence_length > w:
+                table[j][w] = table[j - 1][w]
+            else:
+                table[j][w] = max(table[j - 1][w],
+                                  table[j - 1][w - sentence_length] + tf_score)
+
+    result = []
+    w = limit
+    for j in range(len(sentences), 0, -1):
+        was_added = table[j][w] != table[j - 1][w]
+
+        if was_added:
+            sentence_length = sentences[j - 1]['length']
+            result.append(sentences[j - 1])
+            w -= sentence_length
+
+    return result
+
+
 ##########################################
 #            UNPACK SUMMARY              #
 ##########################################
@@ -206,8 +253,8 @@ def reconstruct(corpus, chosen_sentences):
 
 if __name__ == '__main__':
     # IMPORTANT: SPECIFY WORD LIMIT & USE OF TF-IDF
-    lmt = 100
-    use_tfidf = True
+    lmt = 250
+    use_tfidf = False
 
     complete_corpus = []
 
@@ -268,10 +315,19 @@ if __name__ == '__main__':
                     sentence_counter += 1
 
     # Use dynamic programming to find the best sentences to include
-    bagged = knapsack.knapsack01_dp(score_list, lmt, use_tfidf)
-    val, wt = knapsack.total_value(bagged, lmt)
+    bagged = knapsack01_dp(score_list, lmt, use_tfidf)
+    val, wt = total_value(bagged, lmt)
     print("Reconstructed summary for a total value of %f and a total weight of %i" % (val, -wt))
 
     summary = reconstruct(complete_corpus, bagged)
     print("--------- Summary -------->> ")
     print(summary)
+
+    # DEBUG
+    # Sort words in dictionary by number of appearances across documents
+    # sorted_by_appearances = sorted(dictionary_of_words,
+    #                                key=lambda x: len(dictionary_of_words[x].keys()),
+    #                                reverse=True)
+    # print(sorted_by_appearances)
+
+

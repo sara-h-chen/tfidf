@@ -6,8 +6,8 @@
 
 
 # DEBUG
+# Total up a particular combination of items
 def total_value(comb, limit):
-    """ Total up a particular combination of items """
     totwt = totval = 0
     for dictionary in comb:
         totwt += dictionary['length']
@@ -25,6 +25,8 @@ def knapsack01_dp(sentences, limit, tfidf):
             tf_score = sentences[j - 1]['normalized_tfidf']
         else:
             tf_score = sentences[j - 1]['normalized_tf']
+
+        # Memoize best score seen so far
         for w in range(1, limit + 1):
             if sentence_length > w:
                 table[j][w] = table[j - 1][w]
